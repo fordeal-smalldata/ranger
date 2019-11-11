@@ -18,8 +18,10 @@
  */
 package org.apache.ranger.authorization.presto.authorizer;
 
+import com.google.common.collect.ImmutableSet;
 import io.prestosql.spi.connector.CatalogSchemaName;
 import io.prestosql.spi.connector.CatalogSchemaTableName;
+import io.prestosql.spi.connector.ColumnMetadata;
 import io.prestosql.spi.connector.SchemaTableName;
 import io.prestosql.spi.security.AccessDeniedException;
 import io.prestosql.spi.security.Identity;
@@ -27,6 +29,7 @@ import io.prestosql.spi.security.PrestoPrincipal;
 import io.prestosql.spi.security.Privilege;
 import io.prestosql.spi.security.SystemAccessControl;
 import org.apache.commons.lang.StringUtils;
+import org.apache.curator.utils.ThreadUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.ranger.plugin.audit.RangerDefaultAuditHandler;
@@ -144,7 +147,16 @@ public class RangerSystemAccessControl
 
   @Override
   public Set<String> filterCatalogs(Identity identity, Set<String> catalogs) {
-    return catalogs;
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("==> RangerSystemAccessControl.filterCatalogs(" + catalogs.toString() + ")");
+    }
+    ImmutableSet.Builder<String> filteredCatalogs = ImmutableSet.builder();
+    for (String catalog : catalogs) {
+      if (checkPermission(createResource(catalog), identity, PrestoAccessType.SELECT)) {
+        filteredCatalogs.add(catalog);
+      }
+    }
+    return filteredCatalogs.build();
   }
 
   @Override
@@ -182,8 +194,16 @@ public class RangerSystemAccessControl
 
   @Override
   public Set<String> filterSchemas(Identity identity, String catalogName, Set<String> schemaNames) {
-    LOG.debug("==> RangerSystemAccessControl.filterSchemas(" + catalogName + ")");
-    return schemaNames;
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("==> RangerSystemAccessControl.filterSchemas(" + catalogName + ")");
+    }
+    ImmutableSet.Builder<String> filteredSchemas = ImmutableSet.builder();
+    for (String schema : schemaNames) {
+      if (checkPermission(createResource(catalogName, schema), identity, PrestoAccessType.SELECT)) {
+        filteredSchemas.add(schema);
+      }
+    }
+    return filteredSchemas.build();
   }
 
   @Override
@@ -221,14 +241,24 @@ public class RangerSystemAccessControl
 
   @Override
   public Set<SchemaTableName> filterTables(Identity identity, String catalogName, Set<SchemaTableName> tableNames) {
-    LOG.debug("==> RangerSystemAccessControl.filterTables(" + catalogName + ")");
-    return tableNames;
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("==> RangerSystemAccessControl.filterTables(" + catalogName + ")");
+    }
+    ImmutableSet.Builder<SchemaTableName> filteredTables = ImmutableSet.builder();
+    for (SchemaTableName tableName : tableNames) {
+      if (checkPermission(createResource(catalogName, tableName.getSchemaName(), tableName.getTableName()),
+                          identity, PrestoAccessType.SELECT)) {
+        filteredTables.add(tableName);
+      }
+    }
+    return filteredTables.build();
   }
 
   @Override
   public void checkCanAddColumn(Identity identity, CatalogSchemaTableName table) {
     RangerPrestoResource res = createResource(table);
     if (!checkPermission(res, identity, PrestoAccessType.ALTER)) {
+      LOG.info("==> RangerSystemAccessControl.checkCanAddColumn(" + table.getSchemaTableName().getTableName() + ") deny");
       AccessDeniedException.denyAddColumn(table.getSchemaTableName().getTableName());
     }
   }
@@ -336,6 +366,17 @@ public class RangerSystemAccessControl
     }
   }
 
+  @Override
+  public void checkCanShowColumnsMetadata(Identity identity, CatalogSchemaTableName table) {
+    LOG.info("==> RangerSystemAccessControl.checkCanShowColumnsMetadata(" + table + ")");
+  }
+
+  @Override
+  public List<ColumnMetadata> filterColumns(Identity identity, CatalogSchemaTableName table, List<ColumnMetadata> columns) {
+    LOG.info("==> RangerSystemAccessControl.checkCanShowColumnsMetadata(table=" + table + ",columns=" + columns.toString() + ")");
+    return columns;
+  }
+
   private static RangerPrestoResource createResource(CatalogSchemaName catalogSchemaName) {
     return createResource(catalogSchemaName.getCatalogName(), catalogSchemaName.getSchemaName());
   }
@@ -383,7 +424,7 @@ public class RangerSystemAccessControl
 
 class RangerPrestoResource
   extends RangerAccessResourceImpl {
-
+  private static final String KEY_DEFAULT_VALUE = "-";
 
   public static final String KEY_CATALOG = "catalog";
   public static final String KEY_SCHEMA = "schema";
@@ -394,25 +435,16 @@ class RangerPrestoResource
 
   public RangerPrestoResource(String catalogName, Optional<String> schema, Optional<String> table) {
     setValue(KEY_CATALOG, catalogName);
-    if (schema.isPresent()) {
-      setValue(KEY_SCHEMA, schema.get());
-    }
-    if (table.isPresent()) {
-      setValue(KEY_TABLE, table.get());
-    }
+    setValue(KEY_SCHEMA, schema.orElse(KEY_DEFAULT_VALUE));
+    setValue(KEY_TABLE, table.orElse(KEY_DEFAULT_VALUE));
+    setValue(KEY_COLUMN, KEY_DEFAULT_VALUE);
   }
 
   public RangerPrestoResource(String catalogName, Optional<String> schema, Optional<String> table, Optional<String> column) {
     setValue(KEY_CATALOG, catalogName);
-    if (schema.isPresent()) {
-      setValue(KEY_SCHEMA, schema.get());
-    }
-    if (table.isPresent()) {
-      setValue(KEY_TABLE, table.get());
-    }
-    if (column.isPresent()) {
-      setValue(KEY_COLUMN, column.get());
-    }
+    setValue(KEY_SCHEMA, schema.orElse(KEY_DEFAULT_VALUE));
+    setValue(KEY_TABLE, table.orElse(KEY_DEFAULT_VALUE));
+    setValue(KEY_COLUMN, column.orElse(KEY_DEFAULT_VALUE));
   }
 
   public String getCatalogName() {

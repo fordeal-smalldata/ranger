@@ -23,6 +23,7 @@ import org.apache.ranger.plugin.classloader.RangerPluginClassLoader;
 
 import javax.inject.Inject;
 import java.security.Principal;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -103,7 +104,17 @@ public class RangerSystemAccessControl
 
   @Override
   public Set<String> filterCatalogs(Identity identity, Set<String> catalogs) {
-    return catalogs;
+    try {
+      activatePluginClassLoader();
+      return systemAccessControlImpl.filterCatalogs(identity, catalogs);
+    } catch (AccessDeniedException e) {
+      deactivatePluginClassLoader();
+      throw e;
+    } catch (Exception e) {
+      deactivatePluginClassLoader();
+      AccessDeniedException.denyCatalogAccess("FilterCatalogs");
+    }
+    return Collections.emptySet();
   }
 
   @Override
@@ -164,7 +175,17 @@ public class RangerSystemAccessControl
 
   @Override
   public Set<String> filterSchemas(Identity identity, String catalogName, Set<String> schemaNames) {
-    return schemaNames;
+    try {
+      activatePluginClassLoader();
+      return systemAccessControlImpl.filterSchemas(identity, catalogName, schemaNames);
+    } catch (AccessDeniedException e) {
+      deactivatePluginClassLoader();
+      throw e;
+    } catch (Exception e) {
+      deactivatePluginClassLoader();
+      AccessDeniedException.denyCatalogAccess(catalogName);
+    }
+    return Collections.emptySet();
   }
 
   @Override
@@ -225,7 +246,17 @@ public class RangerSystemAccessControl
 
   @Override
   public Set<SchemaTableName> filterTables(Identity identity, String catalogName, Set<SchemaTableName> tableNames) {
-    return tableNames;
+    try {
+      activatePluginClassLoader();
+      return systemAccessControlImpl.filterTables(identity, catalogName, tableNames);
+    } catch (AccessDeniedException e) {
+      deactivatePluginClassLoader();
+      throw e;
+    } catch (Exception e) {
+      deactivatePluginClassLoader();
+      AccessDeniedException.denyCatalogAccess(catalogName);
+    }
+    return Collections.emptySet();
   }
 
   @Override
@@ -367,7 +398,7 @@ public class RangerSystemAccessControl
       AccessDeniedException.denySetCatalogSessionProperty(catalogName, propertyName);
     }
   }
-
+  
   private void activatePluginClassLoader() {
     if (rangerPluginClassLoader != null) {
       rangerPluginClassLoader.activate();
