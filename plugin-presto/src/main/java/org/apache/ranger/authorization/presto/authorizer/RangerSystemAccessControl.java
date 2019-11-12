@@ -29,7 +29,6 @@ import io.prestosql.spi.security.PrestoPrincipal;
 import io.prestosql.spi.security.Privilege;
 import io.prestosql.spi.security.SystemAccessControl;
 import org.apache.commons.lang.StringUtils;
-import org.apache.curator.utils.ThreadUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.ranger.plugin.audit.RangerDefaultAuditHandler;
@@ -89,6 +88,10 @@ public class RangerSystemAccessControl
   }
 
   private boolean checkPermission(RangerPrestoResource resource, Identity identity, PrestoAccessType accessType) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("==> RangerSystemAccessControl.checkPermission(resource = " + resource + ", identity = " + identity +
+              ", accessType = "  + accessType);
+    }
     boolean ret = false;
 
     UserGroupInformation ugi = UserGroupInformation.createRemoteUser(identity.getUser());
@@ -107,11 +110,17 @@ public class RangerSystemAccessControl
       accessType
     );
 
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("==> RangerSystemAccessControl.checkPermission(request = " + request);
+    }
+
     RangerAccessResult result = rangerPlugin.isAccessAllowed(request);
     if (result != null && result.getIsAllowed()) {
       ret = true;
     }
-
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("<== RangerSystemAccessControl.checkPermission(ret = " + ret);
+    }
     return ret;
   }
 
