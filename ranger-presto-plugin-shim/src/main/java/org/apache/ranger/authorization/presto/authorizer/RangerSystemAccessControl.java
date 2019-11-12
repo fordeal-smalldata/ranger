@@ -15,6 +15,7 @@ package org.apache.ranger.authorization.presto.authorizer;
 
 import io.prestosql.spi.connector.CatalogSchemaName;
 import io.prestosql.spi.connector.CatalogSchemaTableName;
+import io.prestosql.spi.connector.ColumnMetadata;
 import io.prestosql.spi.connector.SchemaTableName;
 import io.prestosql.spi.security.AccessDeniedException;
 import io.prestosql.spi.security.Identity;
@@ -25,6 +26,7 @@ import javax.inject.Inject;
 import java.security.Principal;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -313,6 +315,25 @@ public class RangerSystemAccessControl
       deactivatePluginClassLoader();
       AccessDeniedException.denySelectColumns(table.getSchemaTableName().getTableName(), columns);
     }
+  }
+
+  @Override
+  public void checkCanShowColumnsMetadata(Identity identity, CatalogSchemaTableName table) {
+    try {
+      activatePluginClassLoader();
+      systemAccessControlImpl.checkCanShowColumnsMetadata(identity, table);
+    } catch (AccessDeniedException e) {
+      deactivatePluginClassLoader();
+      throw e;
+    } catch (Exception e) {
+      deactivatePluginClassLoader();
+      AccessDeniedException.denyShowColumnsMetadata(table.toString());
+    }
+  }
+
+  @Override
+  public List<ColumnMetadata> filterColumns(Identity identity, CatalogSchemaTableName table, List<ColumnMetadata> columns) {
+    return columns;
   }
 
   @Override
