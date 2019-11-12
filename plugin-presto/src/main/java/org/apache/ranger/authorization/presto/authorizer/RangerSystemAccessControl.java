@@ -90,13 +90,16 @@ public class RangerSystemAccessControl
   private boolean checkPermission(RangerPrestoResource resource, Identity identity, PrestoAccessType accessType) {
     if (LOG.isDebugEnabled()) {
       LOG.debug("==> RangerSystemAccessControl.checkPermission(resource = " + resource + ", identity = " + identity +
-              ", accessType = "  + accessType);
+              ", accessType = "  + accessType + ")");
     }
     boolean ret = false;
-
     UserGroupInformation ugi = UserGroupInformation.createRemoteUser(identity.getUser());
+    String[] groups = ugi.getGroupNames();
 
-    String[] groups = ugi != null ? ugi.getGroupNames() : null;
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("==> RangerSystemAccessControl.checkPermission(shortName=" + ugi.getShortUserName() +
+                        ",group=" + Arrays.toString(groups) + ")");
+    }
 
     Set<String> userGroups = null;
     if (groups != null && groups.length > 0) {
@@ -105,13 +108,13 @@ public class RangerSystemAccessControl
 
     RangerPrestoAccessRequest request = new RangerPrestoAccessRequest(
       resource,
-      identity.getUser(),
+      ugi.getShortUserName(),
       userGroups,
       accessType
     );
 
     if (LOG.isDebugEnabled()) {
-      LOG.debug("==> RangerSystemAccessControl.checkPermission(request = " + request);
+      LOG.debug("==> RangerSystemAccessControl.checkPermission(request = " + request + ")");
     }
 
     RangerAccessResult result = rangerPlugin.isAccessAllowed(request);
@@ -119,7 +122,7 @@ public class RangerSystemAccessControl
       ret = true;
     }
     if (LOG.isDebugEnabled()) {
-      LOG.debug("<== RangerSystemAccessControl.checkPermission(ret = " + ret);
+      LOG.debug("<== RangerSystemAccessControl.checkPermission(ret = " + ret + ")");
     }
     return ret;
   }
